@@ -18,8 +18,16 @@ def get_data(args: argparse.Namespace):
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
-    if args.dataset =='CUB-200-2011':     
-        return get_birds(True, './data/CUB_200_2011/dataset/train_crop', './data/CUB_200_2011/dataset/train', './data/CUB_200_2011/dataset/test_crop', args.image_size, args.seed, args.validation_size, './data/CUB_200_2011/dataset/train', './data/CUB_200_2011/dataset/test_full')
+    if args.dataset =='CUB-200-2011':
+        return get_birds(
+            True,
+            '/shared/sets/datasets/birds/train_birds_augmented/train_birds_augmented/train_birds_augmented',
+            '/shared/sets/datasets/birds/train_birds/train_birds/train_birds',
+            '/shared/sets/datasets/birds/test_birds/test_birds/test_birds',
+            args.image_size, args.seed, args.validation_size,
+            '/shared/sets/datasets/birds/train_birds/train_birds/train_birds',
+            '/shared/sets/datasets/birds/test_full'
+        )
     if args.dataset == 'pets':
         return get_pets(True, './data/PETS/dataset/train','./data/PETS/dataset/train','./data/PETS/dataset/test', args.image_size, args.seed, args.validation_size)
     if args.dataset == 'partimagenet': #use --validation_size of 0.2

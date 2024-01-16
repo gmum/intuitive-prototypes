@@ -9,6 +9,9 @@ import torchvision.transforms as transforms
 import torchvision
 from util.func import get_patch_size
 import random
+import numpy as np
+import cv2
+
 
 @torch.no_grad()                    
 def visualize_topk(net, projectloader, num_classes, device, foldername, args: argparse.Namespace, k=10):
@@ -22,6 +25,7 @@ def visualize_topk(net, projectloader, num_classes, device, foldername, args: ar
     saved = dict()
     saved_ys = dict()
     tensors_per_prototype = dict()
+    heatmaps_per_prototype = dict()
     
     for p in range(net.module._num_prototypes):
         near_imgs_dir = os.path.join(dir, str(p))
@@ -30,6 +34,7 @@ def visualize_topk(net, projectloader, num_classes, device, foldername, args: ar
         saved[p]=0
         saved_ys[p]=[]
         tensors_per_prototype[p]=[]
+        heatmaps_per_prototype[p]=[]
     
     patchsize, skip = get_patch_size(args)
 
@@ -130,12 +135,23 @@ def visualize_topk(net, projectloader, num_classes, device, foldername, args: ar
                                 img_tensor = transforms.ToTensor()(image).unsqueeze_(0) #shape (1, 3, h, w)
                                 h_coor_min, h_coor_max, w_coor_min, w_coor_max = get_img_coordinates(args.image_size, softmaxes.shape, patchsize, skip, h_idx, w_idx)
                                 img_tensor_patch = img_tensor[0, :, h_coor_min:h_coor_max, w_coor_min:w_coor_max]
-                                        
-                                saved[p]+=1
+
+                                heatmap = softmaxes[0, p, :, :].squeeze().detach().cpu().numpy()
+                                heatmap = cv2.resize(heatmap, dsize=(args.image_size, args.image_size),
+                                                     interpolation=cv2.INTER_CUBIC)
+                                heatmap = cv2.applyColorMap(np.uint8(255 * heatmap), cv2.COLORMAP_JET)
+                                heatmap = np.float32(heatmap) / 255
+                                heatmap = heatmap[..., ::-1]
+                                heatmap = np.moveaxis(heatmap, -1, 0)
+                                overlayed_heatmap = 0.5 * img_tensor.squeeze() + 0.3 * torch.from_numpy(heatmap.copy())
+
+                                saved[p] += 1
                                 tensors_per_prototype[p].append(img_tensor_patch)
+                                heatmaps_per_prototype[p].append(overlayed_heatmap)
 
     print("Abstained: ", abstained, flush=True)
     all_tensors = []
+    all_heatmaps = []
     for p in range(net.module._num_prototypes):
         if saved[p]>0:
             # add text next to each topk-grid, to easily see which prototype it is
@@ -145,17 +161,25 @@ def visualize_topk(net, projectloader, num_classes, device, foldername, args: ar
             draw.text((img_tensor_patch.shape[0]//2, img_tensor_patch.shape[1]//2), text, anchor='mm', fill="white")
             txttensor = transforms.ToTensor()(txtimage)
             tensors_per_prototype[p].append(txttensor)
+            hmapimage = Image.new("RGB", (img_tensor.squeeze().shape[1], img_tensor.squeeze().shape[2]), (0, 0, 0))
+            hmaptensor = transforms.ToTensor()(hmapimage)
+            heatmaps_per_prototype[p].append(hmaptensor)
             # save top-k image patches in grid
             try:
                 grid = torchvision.utils.make_grid(tensors_per_prototype[p], nrow=k+1, padding=1)
                 torchvision.utils.save_image(grid,os.path.join(dir,"grid_topk_%s.png"%(str(p))))
+                hmap_grid = torchvision.utils.make_grid(heatmaps_per_prototype[p], nrow=k + 1, padding=1)
+                torchvision.utils.save_image(hmap_grid, os.path.join(dir, "heatmaps_grid_topk_%s.png" % (str(p))))
                 if saved[p]>=k:
                     all_tensors+=tensors_per_prototype[p]
+                    all_heatmaps += heatmaps_per_prototype[p]
             except:
                 pass
     if len(all_tensors)>0:
         grid = torchvision.utils.make_grid(all_tensors, nrow=k+1, padding=1)
         torchvision.utils.save_image(grid,os.path.join(dir,"grid_topk_all.png"))
+        hmap_grid = torchvision.utils.make_grid(all_heatmaps, nrow=k + 1, padding=1)
+        torchvision.utils.save_image(hmap_grid, os.path.join(dir, "heatmaps_grid_topk_all.png"))
     else:
         print("Pretrained prototypes not visualized. Try to pretrain longer.", flush=True)
     return topks

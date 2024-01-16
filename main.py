@@ -162,7 +162,11 @@ def run_pipnet(args=None):
         plt.clf()
         plt.plot(lrs_pretrain_net)
         plt.savefig(os.path.join(args.log_dir,'lr_pretrain_net.png'))
-        log.log_values('log_epoch_overview', epoch, "n.a.", "n.a.", "n.a.", "n.a.", "n.a.", "n.a.", "n.a.", train_info['loss'])
+        eval_info = eval_pipnet(net, testloader, epoch, device, log)
+        log.log_values(
+            'log_epoch_overview', epoch, eval_info['top1_accuracy'], eval_info['top5_accuracy'],
+            eval_info['almost_sim_nonzeros'], eval_info['local_size_all_classes'], eval_info['almost_nonzeros'],
+            eval_info['num non-zero prototypes'], train_info['train_accuracy'], train_info['loss'])
     
     if args.state_dict_dir_net == '':
         net.eval()
@@ -191,7 +195,7 @@ def run_pipnet(args=None):
     lrs_classifier = []
    
     for epoch in range(1, args.epochs + 1):                      
-        epochs_to_finetune = 3 #during finetuning, only train classification layer and freeze rest. usually done for a few epochs (at least 1, more depends on size of dataset)
+        epochs_to_finetune = args.epochs  # 3 during finetuning, only train classification layer and freeze rest. usually done for a few epochs (at least 1, more depends on size of dataset)
         if epoch <= epochs_to_finetune and (args.epochs_pretrain > 0 or args.state_dict_dir_net != ''):
             for param in net.module._add_on.parameters():
                 param.requires_grad = False
