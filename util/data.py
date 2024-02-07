@@ -21,7 +21,7 @@ def get_data(args: argparse.Namespace):
     if args.dataset =='CUB-200-2011':
         return get_birds(
             True,
-            '/shared/sets/datasets/birds/train_birds_augmented/train_birds_augmented/train_birds_augmented',
+            '/shared/sets/datasets/birds/train_birds/train_birds/train_birds',
             '/shared/sets/datasets/birds/train_birds/train_birds/train_birds',
             '/shared/sets/datasets/birds/test_birds/test_birds/test_birds',
             args.image_size, args.seed, args.validation_size,
