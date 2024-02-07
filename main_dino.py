@@ -1,11 +1,11 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -33,6 +33,9 @@ from torchvision import models as torchvision_models
 import utils
 import vision_transformer as vits
 from vision_transformer import DINOHead
+
+from pipnet_for_dino import load_pipnet_for_dino
+
 
 torchvision_archs = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
@@ -130,6 +133,11 @@ def get_args_parser():
 
 
 def train_dino(args):
+    if args.arch == 'pipnet':
+        student, num_prototypes = load_pipnet_for_dino()
+        teacher, num_prototypes = load_pipnet_for_dino()
+        args.out_dim = num_prototypes
+
     utils.init_distributed_mode(args)
     utils.fix_random_seeds(args.seed)
     print("git:\n  {}\n".format(utils.get_sha()))
@@ -177,21 +185,27 @@ def train_dino(args):
         teacher = torchvision_models.__dict__[args.arch]()
         embed_dim = student.fc.weight.shape[1]
     elif args.arch == 'pipnet':
-
+        print('PIPNet arch loaded')
     else:
         print(f"Unknow architecture: {args.arch}")
 
-    # multi-crop wrapper handles forward with inputs of different resolutions
-    student = utils.MultiCropWrapper(student, DINOHead(
-        embed_dim,
-        args.out_dim,
-        use_bn=args.use_bn_in_head,
-        norm_last_layer=args.norm_last_layer,
-    ))
-    teacher = utils.MultiCropWrapper(
-        teacher,
-        DINOHead(embed_dim, args.out_dim, args.use_bn_in_head),
-    )
+    if args.arch == 'pipnet':
+        # multi-crop wrapper handles forward with inputs of different resolutions
+        student = utils.MultiCropWrapper(student, nn.Identity())
+        teacher = utils.MultiCropWrapper(teacher, nn.Identity())
+    else:
+        # multi-crop wrapper handles forward with inputs of different resolutions
+        student = utils.MultiCropWrapper(student, DINOHead(
+            embed_dim,
+            args.out_dim,
+            use_bn=args.use_bn_in_head,
+            norm_last_layer=args.norm_last_layer,
+        ))
+        teacher = utils.MultiCropWrapper(
+            teacher,
+            DINOHead(embed_dim, args.out_dim, args.use_bn_in_head),
+        )
+
     # move networks to gpu
     student, teacher = student.cuda(), teacher.cuda()
     # synchronize batch norms (if any)
