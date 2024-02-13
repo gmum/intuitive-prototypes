@@ -26,6 +26,8 @@ from torchvision import models as torchvision_models
 import utils
 import vision_transformer as vits
 
+from pipnet_for_dino import load_pipnet_for_dino
+
 
 def extract_feature_pipeline(args):
     # ============ preparing data ... ============
@@ -35,8 +37,8 @@ def extract_feature_pipeline(args):
         pth_transforms.ToTensor(),
         pth_transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
     ])
-    dataset_train = ReturnIndexDataset(os.path.join(args.data_path, "train"), transform=transform)
-    dataset_val = ReturnIndexDataset(os.path.join(args.data_path, "val"), transform=transform)
+    dataset_train = ReturnIndexDataset(args.data_path, transform=transform)
+    dataset_val = ReturnIndexDataset(args.data_path.replace('train', 'test'), transform=transform)
     sampler = torch.utils.data.DistributedSampler(dataset_train, shuffle=False)
     data_loader_train = torch.utils.data.DataLoader(
         dataset_train,
@@ -64,6 +66,10 @@ def extract_feature_pipeline(args):
     elif args.arch in torchvision_models.__dict__.keys():
         model = torchvision_models.__dict__[args.arch](num_classes=0)
         model.fc = nn.Identity()
+    elif args.arch == 'pipnet':
+        model, num_prototypes = load_pipnet_for_dino()
+        args.out_dim = num_prototypes
+        args.patch_size = None
     else:
         print(f"Architecture {args.arch} non supported")
         sys.exit(1)
