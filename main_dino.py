@@ -47,7 +47,7 @@ def get_args_parser():
     # Model parameters
     parser.add_argument('--arch', default='vit_small', type=str,
         choices=['vit_tiny', 'vit_small', 'vit_base', 'xcit', 'deit_tiny', 'deit_small'] \
-                + torchvision_archs + torch.hub.list("facebookresearch/xcit:main") + ['pipnet'],
+                + torchvision_archs + ['pipnet'],  # torch.hub.list("facebookresearch/xcit:main"),
         help="""Name of architecture to train. For quick experiments with ViTs,
         we recommend using vit_tiny or vit_small.""")
     parser.add_argument('--patch_size', default=16, type=int, help="""Size in pixels
@@ -173,12 +173,14 @@ def train_dino(args):
         )
         teacher = vits.__dict__[args.arch](patch_size=args.patch_size)
         embed_dim = student.embed_dim
+    
     # if the network is a XCiT
-    elif args.arch in torch.hub.list("facebookresearch/xcit:main"):
-        student = torch.hub.load('facebookresearch/xcit:main', args.arch,
-                                 pretrained=False, drop_path_rate=args.drop_path_rate)
-        teacher = torch.hub.load('facebookresearch/xcit:main', args.arch, pretrained=False)
-        embed_dim = student.embed_dim
+    #elif args.arch in torch.hub.list("facebookresearch/xcit:main"):
+    #    student = torch.hub.load('facebookresearch/xcit:main', args.arch,
+    #                             pretrained=False, drop_path_rate=args.drop_path_rate)
+    #    teacher = torch.hub.load('facebookresearch/xcit:main', args.arch, pretrained=False)
+    #    embed_dim = student.embed_dim
+    
     # otherwise, we check if the architecture is in torchvision models
     elif args.arch in torchvision_models.__dict__.keys():
         student = torchvision_models.__dict__[args.arch]()
@@ -402,7 +404,7 @@ class DINOLoss(nn.Module):
 
         # teacher centering and sharpening
         temp = self.teacher_temp_schedule[epoch]
-        teacher_out = F.softmax((teacher_output - self.center) / temp, dim=-1)
+        teacher_out = torch.minimum(torch.ones_like(teacher_output), (teacher_output + F.relu(-(teacher_output - self.center)) - self.center) / temp)
         teacher_out = teacher_out.detach().chunk(2)
 
         total_loss = 0
@@ -412,7 +414,7 @@ class DINOLoss(nn.Module):
                 if v == iq:
                     # we skip cases where student and teacher operate on the same view
                     continue
-                loss = torch.sum(-q * F.log_softmax(student_out[v], dim=-1), dim=-1)
+                loss = torch.sum(-q * torch.log(student_out[v]), dim=-1)
                 total_loss += loss.mean()
                 n_loss_terms += 1
         total_loss /= n_loss_terms

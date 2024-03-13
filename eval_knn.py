@@ -27,6 +27,8 @@ import utils
 import vision_transformer as vits
 
 from pipnet_for_dino import load_pipnet_for_dino
+import numpy as np
+import matplotlib.pyplot as plt
 
 
 def extract_feature_pipeline(args):
@@ -82,6 +84,25 @@ def extract_feature_pipeline(args):
     train_features = extract_features(model, data_loader_train, args.use_cuda)
     print("Extracting features for val set...")
     test_features = extract_features(model, data_loader_val, args.use_cuda)
+
+    thresh = [0.5, 0.6, 0.7, 0.8, 0.9, 1]
+    fig = plt.figure()
+    for idx, thr in enumerate(thresh):
+        plt.subplot(2, 3, idx + 1)
+        counts = np.sum(train_features.detach().cpu().numpy() >= thr, axis=1).flatten()
+        plt.hist(counts, bins=(1000 if thr == 1 else 10))
+        plt.title('# >= ' + str(thr))
+    plt.tight_layout()
+    plt.savefig('train_histograms_of_high_prototype_activations.png')
+
+    fig = plt.figure()
+    for idx, thr in enumerate(thresh):
+        plt.subplot(2, 3, idx + 1)
+        counts = np.sum(test_features.detach().cpu().numpy() >= thr, axis=1).flatten()
+        plt.hist(counts, bins=(1000 if thr == 1 else 10))
+        plt.title('# >= ' + str(thr))
+    plt.tight_layout()
+    plt.savefig('test_histograms_of_high_prototype_activations.png')
 
     if utils.get_rank() == 0:
         train_features = nn.functional.normalize(train_features, dim=1, p=2)
